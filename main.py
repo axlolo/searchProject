@@ -8,13 +8,14 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 load_dotenv()
 
-
 #pip install google-search-results
 #pip install python-dotenv
 
-
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
 SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
+
+price_input_per_million = 0.1
+price_output_per_million = 0.4
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -41,22 +42,20 @@ if not os.path.exists(DOMAIN_STATUS_FILE) or os.path.getsize(DOMAIN_STATUS_FILE)
 
 domain_map = load_domain_map()
 
-# ─── 2) helper to get “root” domain ────────────────────────────────────────────
-
 def get_root_domain(url):
     netloc = urlparse(url).netloc.lower()
     parts = netloc.split(".")
     if len(parts) >= 2:
-        return ".".join(parts[-2:])      # e.g. ["www","nytimes","com"] → "nytimes.com"
+        return ".".join(parts[-2:])
     return netloc
 
-# ─── 3) paywall detection on first‐seen domains ──────────────────────────────
+# paywall detection on first‐seen domains
 
 PAYWALL_SELECTORS = [
-    ".paywall",              # generic
-    ".subscription-wall",     # some publishers
-    "#gateway-content",       # NYTimes “gateway” div
-    ".meteredContent",        # WSJ, FT, etc.
+    ".paywall",             # generic
+    ".subscription-wall",   # some publishers
+    "#gateway-content",     # NYTimes “gateway” div
+    ".meteredContent",      # WSJ, FT, etc.
 ]
 
 def is_accessible(url):
@@ -92,14 +91,12 @@ def is_accessible(url):
     save_domain_map(domain_map)
     return True
 
-# ─── 4) integrate into your existing search & summary flow ────────────────────
-
 resultList = []
 summaryList = []
 
 def search(query, num_results):
     params = {
-        "engine":   "google_news",  # changed from "google"
+        "engine":   "google_news",
         "q":        query,
         "hl":       "en",
         "gl":       "us",
@@ -153,8 +150,6 @@ def get_snippet(country, topic, date):
     resultList[:] = filtered
     print(f"Filter: started with {len(original)} links, kept {len(filtered)}")
 
-
-    # now fetch & summarize
     for res in resultList:
         input_tokens = 0
         output_tokens = 0
@@ -182,9 +177,7 @@ def get_snippet(country, topic, date):
         summaryList.append(resp.choices[0].message.content.strip())
         input_tokens += resp.usage.prompt_tokens
         output_tokens += resp.usage.completion_tokens
-        #print(f"Summary token usage: prompt={resp.usage.prompt_tokens}, completion={resp.usage.completion_tokens}, total={resp.usage.total_tokens}")
 
-    # final headline summary
     combined = "\n".join(summaryList)
     prompt = (
         "You are an analytical and concise news reporter. You will be given search results "
@@ -202,12 +195,17 @@ def get_snippet(country, topic, date):
     )
     input_tokens += resp.usage.prompt_tokens
     output_tokens += resp.usage.completion_tokens
-    print(f"Total input tokens ={input_tokens}, output ={output_tokens}")
+    print(f"Price ={round(price(input_tokens, output_tokens), 6)}, # tokens ={input_tokens}, # output ={output_tokens}")
 
-    # save map one more time in case anything changed
     save_domain_map(domain_map)
 
     return f"{final.choices[0].message.content.strip()} ({len(resultList)} links)"
+
+def price (input, output):
+    priceI = price_input_per_million/1000000
+    priceO = price_output_per_million/1000000
+
+    return input*priceI + output*priceO
 
 if __name__ == "__main__":
     print(get_snippet("United States", "Politics", "May 1st, 2025"))
