@@ -5,6 +5,14 @@ from bs4 import BeautifulSoup
 import json, os
 from urllib.parse import urlparse
 
+from dotenv import load_dotenv
+load_dotenv()
+
+
+#pip install google-search-results
+#pip install python-dotenv
+
+
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
 SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
 
